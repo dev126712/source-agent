@@ -1,0 +1,100 @@
+# Local dev stack for the sourcing agent.
+#
+#   docker compose up --build
+#   → API at http://localhost:8000  (redirects to /app/ — the frontend)
+#
+# The Evaluate flow runs entirely on mock providers (no DB, no credentials).
+# Discovery needs Postgres tables. The schema is not auto-created on purpose —
+# apply the migrations once the stack is up:
+#
+#   docker compose exec api alembic upgrade head
+#
+# (or `uv run alembic upgrade head` from the host, which reaches the published
+# port). Rebuild after pulling new migrations: the image COPYs alembic/ in, and
+# only ./app and ./web are bind-mounted for reload.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sourcing
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sourcing"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    # --reload for local dev; the image's CMD is the production form.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      DEPLOYMENT_ENV: dev
+      # asyncpg driver + service hostnames (not localhost).
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/sourcing
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      AMAZON_PROVIDER: mock
+      # Real credentials are optional — supplied via .env when you have them.
+      # LLM_PROVIDER, ANTHROPIC_API_KEY, KEEPA_API_KEY, ...
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      # Bind-mount source for live reload. The venv lives at /opt/venv,
+      # so mounting ./app and ./web here does not shadow installed deps.
+      - ./app:/app/app
+      - ./web:/app/web
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # Celery worker — not wired yet (app/workers/ is empty; see CLAUDE.md TODO #4).
+  # Uncomment once a Celery app exists, then: docker compose up worker
+  #
+  # worker:
+  #   build: .
+  #   command: celery -A app.workers.celery_app worker --loglevel=info
+  #   environment:
+  #     DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/sourcing
+  #     CELERY_BROKER_URL: redis://redis:6379/1
+  #     CELERY_RESULT_BACKEND: redis://redis:6379/2
+  #     AMAZON_PROVIDER: mock
+  #   env_file:
+  #     - path: .env
+  #       required: false
+  #   volumes:
+  #     - ./app:/app/app
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+
+volumes:
+  pgdata:

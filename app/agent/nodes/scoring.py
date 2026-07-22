@@ -31,13 +31,21 @@ async def compute_profit(state: SourcingState) -> dict:
         else None
     )
 
-    return {
+    out: dict = {
         "est_profit": profit.quantize(Decimal("0.01")) if profit is not None else None,
         "est_margin_pct": margin,
         "breakeven_price": (
             breakeven.quantize(Decimal("0.01")) if breakeven is not None else None
         ),
     }
+    if cost is None:
+        # Say why. Without this the run yields margin=None, which _rules_verdict
+        # turns into a confident "avoid" — a verdict the evidence doesn't support.
+        out["errors"] = [
+            "no cost basis (no local price, and no supplier finding with a "
+            "unit price); cannot compute profit"
+        ]
+    return out
 
 
 def _cost_basis(state: SourcingState) -> Decimal | None:
@@ -89,8 +97,13 @@ def _fallback_reasoning(state: SourcingState, verdict: str, margin) -> str:
     parts = [f"Verdict: {verdict}."]
     if margin is not None:
         parts.append(f"Estimated margin {margin}%.")
+    else:
+        # Never let an unpriced candidate read as a researched rejection.
+        parts.append("No margin could be computed, so this is not a priced rejection.")
     if state.get("bsr") is not None:
         parts.append(f"BSR {state['bsr']}.")
     if state.get("risk_flags"):
         parts.append("Risks: " + "; ".join(state["risk_flags"]) + ".")
+    if state.get("errors"):
+        parts.append("Gaps: " + "; ".join(state["errors"]) + ".")
     return " ".join(parts)

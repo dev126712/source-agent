@@ -113,20 +113,60 @@ app/
   services/    fees, seen_memory, seed_expansion, discovery (orchestrator)
   api/routes/  candidates, discovery
   workers/     (empty — Celery tasks go here)
-tests/         (empty — no tests written yet)
+web/           static frontend (no build step) — index.html + styles.css + app.js
+tests/         pytest (asyncio_mode=auto, pythonpath=["."]); only wholesale cost-basis so far
 ```
+
+### Frontend (`web/`)
+Vanilla HTML/CSS/JS, deliberately build-free to match the dependency-light
+backend. FastAPI serves it same-origin via `StaticFiles` mounted at `/app`
+(`/` redirects there), so the page calls `/api/v1/...` with no CORS setup.
+Design system is `DESIGN.md` (Neumorphism) — tokens are mirrored as CSS custom
+properties in `styles.css`; Space Mono / JetBrains Mono are declared atop a
+monospace fallback stack (drop `.woff2` into `web/fonts/` + add `@font-face` to
+load the real faces).
+
+Three **views**, switched by the left rail and keyed on `location.hash`
+(`#evaluate` / `#batches` / `#discovery`) — hash, not path, because `StaticFiles`
+has no SPA fallback and `/app/batches` would 404. `showView()` in `app.js` owns
+the `.hidden` toggle, the `.on` nav state, the page heading, and resets the
+shared agent chip. Each view owns one flow and one output container:
+
+- **Evaluate** (`#report`) — text/barcode → `/candidates/evaluate`. Only this
+  view carries the `#pipe` graph trace. Barcode input is validated client-side:
+  a non-GTIN is rejected outright rather than silently degraded to a name search
+  (0.85 → 0.45 confidence), since the verdict looks equally authoritative either way.
+- **Batches** (`#csv-report`) — CSV → `/candidates/csv/validate`.
+- **Discovery** (`#cands`) — location → `/discovery/run`. Needs a live DB *and*
+  applied migrations; the page degrades gracefully without them. Note it reads
+  its own `#disc-region`, not Evaluate's `#region`.
+
+Each view has its own sourcing-mode `seg` (`#mode`, `#csv-mode`) because `seg()`
+binds by element id; they are deliberately not synced.
+The `/candidates/evaluate` response is intentionally whole — verdict, the
+deterministic profit **ledger** (computed in `_ledger`, never in JS — rule #1),
+and cited findings/sources for the auditable trail (rule #6).
 
 ## Running / checking
 
 ```bash
 uv sync
+uv run alembic upgrade head      # required before Discovery works (Evaluate needs no DB)
 uv run uvicorn app.main:app --reload
 # Offline sanity without a DB (engine is lazy): import the app, hit pure services.
 PYTHONPATH=. python -c "from app.main import app; print('ok')"
+
+# Schema changes: edit the model, import it in app/models/__init__.py, then
+uv run alembic revision --autogenerate -m "what changed"
+uv run alembic check             # "No new upgrade operations detected." = no drift
 ```
 Amazon + retailer providers default to deterministic mocks, so the whole system
 runs with zero external credentials. Set `AMAZON_PROVIDER=keepa` + `KEEPA_API_KEY`
-for real Amazon data; register real retailer adapters in `retailers.py::_REGISTRY`.
+for real Amazon data. Retailer adapters register in `retailers.py::_REGISTRY` but
+are only used when *configured* — `get_retailer_adapters()` returns every real
+adapter whose `is_configured()` is true, and falls back to `MockRetailer` when
+none are. So setting `BESTBUY_API_KEY` alone switches discovery onto live data,
+and unsetting it restores the zero-credential path.
 
 ## Open work (TODO markers live in code; grep `TODO`)
 
@@ -139,24 +179,42 @@ High-leverage, roughly in order:
 2. **LLM synthesis** — `scoring.py::score_and_report` currently uses a deterministic
    fallback. Wire `get_llm()` to produce reasoning that cites findings/sources.
    Keep the rules-based verdict as the floor.
-3. **Discovery → evaluation auto-chain** — `/discovery/run` returns candidates but
-   does NOT yet evaluate them. Chain each `ProductCandidateIn` through
-   `get_compiled_graph().ainvoke(...)`, ideally via Celery for volume.
+3. **Discovery → evaluation auto-chain** — partially closed. The UI now bridges it
+   per-candidate: the "Evaluate →" button on a discovery card sends that
+   `ProductCandidateIn` *whole* to `/candidates/evaluate` (`evaluateDiscovered` in
+   `app.js`), preserving the UPC and `input_channel="discovery"` rather than
+   round-tripping through the text box. The **server-side** chain is still open:
+   `/discovery/run` evaluates nothing. Doing it inline is not viable (a run can
+   return 500 candidates = 500 graph invocations per request), so this wants
+   Celery + a job id — see #4.
 4. **Celery** — nothing in `app/workers/` yet. Needed for: CSV Phase 2 enqueue
    (bulk insert candidates as `pending`, claim in chunks with
    `FOR UPDATE SKIP LOCKED` — serviceflow-marketing pattern), and premium scheduled
    discovery (beat → persisted schedule row → `run_discovery(triggered_by="scheduled")`).
 5. **Amazon provider** — `providers/amazon.py::KeepaProvider.lookup` is `NotImplementedError`.
-6. **Real RetailerAdapter** — implement one approved retailer; register in `_REGISTRY`.
+6. **Real RetailerAdapter** — `BestBuyRetailer` exists but is **UNVERIFIED against
+   the live API** (written without a key; tested only via `httpx.MockTransport`).
+   Two things block it being useful: (a) it is US-only and rejects the Canadian
+   provinces the UI ships — see the cross-region note above; (b) the Products
+   endpoint has no per-store inventory filter, so `search_products` returns
+   region-level "carried in stores", not shelf stock at `store_id`. Per-store
+   data needs Best Buy's invite-only Commerce API. Next real adapter should be
+   one whose product search is genuinely location-scoped.
 7. **Fee ruleset** — `services/fees.py` values are illustrative placeholders. Verify
    against Amazon's published referral/FBA schedules before production. Wire real
    size/weight tiers (currently `_default`).
-8. **Alembic** — no migrations yet. Models exist; generate the initial revision.
+8. ~~**Alembic**~~ — done. `alembic/` is wired to `Base.metadata` via
+   `app/models/__init__.py`; `env.py::get_url()` reads `settings.database_url`
+   (override with `DATABASE_URL`) so alembic and the app can't point at
+   different DBs. Initial revision `8481158fa4db` covers all 5 tables.
+   Autogenerate a new one only after importing any new model in
+   `app/models/__init__.py` — an unimported model is silently omitted.
 9. **Auth** — `discovery.py::current_user_id` / `current_tier` are hardcoded stubs.
    Replace with JWT (httponly cookie), and back `current_tier` with a real
    subscription lookup.
-10. **Tests** — `tests/` is empty. Priorities: `seed_expansion` looseness,
-    `seen_memory.filter_unseen`, the graph's abort path, CSV rejects/dedup.
+10. **Tests** — only `tests/test_wholesale_cost_basis.py` exists (`uv run pytest`).
+    Remaining priorities: `seed_expansion` looseness, `seen_memory.filter_unseen`,
+    the graph's abort path, CSV rejects/dedup.
 
 ## Gotchas
 

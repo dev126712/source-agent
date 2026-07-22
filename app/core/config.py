@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     amazon_provider: Literal["keepa", "sp_api", "mock"] = "mock"
     keepa_api_key: str = ""
 
+    # --- retailer adapters ---
+    # Empty key => the adapter is not registered and discovery falls back to the
+    # mock, so the stack still runs with zero external credentials.
+    bestbuy_api_key: str = ""
+    bestbuy_base_url: str = "https://api.bestbuy.com/v1"
+    retailer_timeout_seconds: float = 10.0
+
     # --- research limits ---
     max_research_iterations: int = 6
     max_candidates_per_csv: int = 5000

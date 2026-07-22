@@ -29,7 +29,9 @@ class SeenProduct(Base):
 
     __table_args__ = (
         # The hot path: "have I seen this key, still un-expired, for this user?"
-        Index("ix_seen_user_key", "user_id", "product_key"),
+        # Unique because record_seen upserts on this pair to refresh the TTL —
+        # ON CONFLICT needs a matching unique constraint to target.
+        Index("ix_seen_user_key", "user_id", "product_key", unique=True),
     )
 
 

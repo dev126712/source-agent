@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Source Agent — Console</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%BE%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/app/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- ============ RAIL ============ -->
+    <aside class="rail">
+      <div class="brand">
+        <div class="mark">S/</div>
+        <div>
+          <h1>Source&nbsp;Agent</h1>
+          <p>resale intel</p>
+        </div>
+      </div>
+
+      <nav>
+        <button class="nav-item" id="nav-eval" data-view="evaluate">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v12H4z"/><path d="M8 20h8M12 16v4"/></svg>
+          Evaluate
+        </button>
+        <button class="nav-item" id="nav-disc" data-view="discovery">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+          Discovery
+        </button>
+        <button class="nav-item" disabled title="Coming soon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>
+          History
+        </button>
+        <button class="nav-item" id="nav-batch" data-view="batches">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M4 12h16M4 18h7"/><circle cx="17" cy="6" r="2"/><circle cx="14" cy="18" r="2"/></svg>
+          Batches
+        </button>
+      </nav>
+
+      <div class="foot">
+        <div class="tier"><span>Plan</span> <b id="tier">Free</b></div>
+        <button class="theme-btn" id="theme" aria-label="Toggle color theme">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>
+          <span>Theme</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <main>
+      <div class="page-head">
+        <div>
+          <h2 id="page-title">Evaluate a product</h2>
+          <p id="page-desc">Run a candidate through the sourcing graph — identity, live Amazon data, mode research, deterministic profit math, verdict.</p>
+        </div>
+        <span class="agent-state" id="state"><span class="dot"></span><span id="state-t">agent idle</span></span>
+      </div>
+
+      <!-- ============ VIEW: EVALUATE ============ -->
+      <section class="view" id="view-evaluate">
+
+      <!-- ---- input console ---- -->
+      <section class="card console">
+        <div class="row">
+          <div class="field">
+            <span class="caps" style="display:block;margin-bottom:8px">Input channel</span>
+            <div class="seg" id="channel" role="tablist">
+              <button class="on" data-val="text">Text</button>
+              <button data-val="barcode">Barcode</button>
+            </div>
+          </div>
+          <div class="field" style="flex:1 1 100%">
+            <label class="caps" for="q" id="q-label">Product</label>
+            <input class="input" id="q" value="Stanley Classic Legendary Bottle 1.4L" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="subline">
+          <div class="mini" style="flex:1 1 300px">
+            <span class="caps">Sourcing mode</span>
+            <div class="seg" id="mode">
+              <button class="on" data-val="retail_arb">Retail arbitrage</button>
+              <button data-val="wholesale">Wholesale</button>
+              <button data-val="artisan">Artisan</button>
+            </div>
+          </div>
+          <div class="mini" id="price-mini">
+            <label class="caps" for="price">Local price</label>
+            <input class="input" id="price" value="34.99" inputmode="decimal" style="min-width:130px" />
+          </div>
+          <div class="mini">
+            <label class="caps" for="region">Region</label>
+            <select class="input" id="region" style="min-width:170px">
+              <option>Ontario</option>
+              <option>Québec</option>
+              <option>British Columbia</option>
+            </select>
+          </div>
+          <button class="run" id="run">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 3l14 9-14 9V3z"/></svg>
+            <span id="run-t">Run evaluation</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ---- pipeline trace ---- -->
+      <div class="pipe" id="pipe">
+        <div class="pnode" data-node><span class="caps">01 · shared</span><div class="pname">identify_product</div><div class="pmeta"></div></div>
+        <div class="pnode" data-node><span class="caps">02 · shared</span><div class="pname">fetch_amazon_data</div><div class="pmeta"></div></div>
+        <div class="pnode" data-node data-route><span class="caps">03 · route</span><div class="pname" id="research-name">retail_arb_research</div><div class="pmeta"></div></div>
+        <div class="pnode" data-node><span class="caps">04 · deterministic</span><div class="pname">compute_profit</div><div class="pmeta"></div></div>
+        <div class="pnode" data-node><span class="caps">05 · synthesis</span><div class="pname">score_and_report</div><div class="pmeta"></div></div>
+      </div>
+
+      <!-- ---- report (rendered by app.js) ---- -->
+      <section id="report" class="hidden"></section>
+
+      </section><!-- /view-evaluate -->
+
+      <!-- ============ VIEW: BATCHES ============ -->
+      <section class="view hidden" id="view-batches">
+        <section class="card console">
+          <div class="row">
+            <div class="field" style="flex:1 1 100%">
+              <label class="caps" for="csv-file">CSV file</label>
+              <input type="file" id="csv-file" accept=".csv" class="input file" />
+            </div>
+          </div>
+
+          <div class="subline">
+            <div class="mini" style="flex:1 1 300px">
+              <span class="caps">Sourcing mode</span>
+              <div class="seg" id="csv-mode">
+                <button class="on" data-val="retail_arb">Retail arbitrage</button>
+                <button data-val="wholesale">Wholesale</button>
+                <button data-val="artisan">Artisan</button>
+              </div>
+            </div>
+            <button class="run" id="csv-run">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 3l14 9-14 9V3z"/></svg>
+              <span>Validate CSV</span>
+            </button>
+          </div>
+        </section>
+
+        <section id="csv-report" class="hidden"></section>
+      </section><!-- /view-batches -->
+
+      <!-- ============ VIEW: DISCOVERY ============ -->
+      <section class="view hidden" id="view-discovery">
+
+      <!-- ---- discovery ---- -->
+      <section class="card disc" id="disc">
+        <div class="disc-head">
+          <h3 style="margin:0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+            Discover from a location
+          </h3>
+          <div class="disc-controls">
+            <input class="input" id="disc-seed" placeholder="seed vibe (optional)" style="width:170px;padding:9px 12px" />
+            <select class="input" id="disc-region" style="width:170px;padding:9px 12px">
+              <option>Ontario</option>
+              <option>Québec</option>
+              <option>British Columbia</option>
+            </select>
+            <div class="slider-wrap">
+              <span class="caps" style="margin:0">Explore</span>
+              <input type="range" id="expl" min="0" max="100" value="35" />
+              <span class="num" id="expl-v" style="font-weight:700;min-width:2.6ch">0.35</span>
+            </div>
+            <button class="disc-run" id="disc-run">Run discovery →</button>
+          </div>
+        </div>
+        <p class="disc-meta" id="disc-meta">On-demand discovery is open to all plans. Fresh = passed the per-user “seen” filter (TTL 90d).</p>
+        <div class="cands" id="cands"></div>
+      </section>
+
+      </section><!-- /view-discovery -->
+
+      <footer>
+        <span>Source Agent · evaluation graph <b class="num">v3</b> · <span id="providers">providers: loading…</span></span>
+        <span class="num" id="stamp"></span>
+      </footer>
+    </main>
+  </div>
+
+  <script src="/app/app.js"></script>
+</body>
+</html>
