@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Environments — .venv and the tool caches self-ignore (they each write a
+# .gitignore containing "*"), but be explicit so it does not depend on that.
+.venv/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# Local secrets. The template is committed; the real file never is.
+.env
+.env.*
+!.env.example

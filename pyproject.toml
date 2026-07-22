@@ -36,3 +36,5 @@ target-version = "py312"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Import `app.*` without installing the project or exporting PYTHONPATH=.
+pythonpath = ["."]
